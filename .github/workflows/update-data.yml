@@ -1,0 +1,67 @@
+name: Update DSE data
+
+on:
+  schedule:
+    # Times are UTC. Dhaka = UTC+6. DSE trades Sun-Thu, 10:00-14:30 Dhaka.
+    - cron: "10 9 * * 0-4"      # 15:10 Dhaka: end-of-day bar (history)
+    - cron: "*/30 4-8 * * 0-4"  # every 30 min during the session: intraday snapshot
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "backfill = first run (builds history), close = add today, live = snapshot"
+        type: choice
+        options: [backfill, close, live]
+        default: backfill
+      days:
+        description: "Days of history for backfill"
+        default: "400"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dse-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install bdshare pandas lxml
+
+      - name: Pick mode
+        id: m
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "mode=${{ github.event.inputs.mode }}" >> "$GITHUB_OUTPUT"
+            echo "days=${{ github.event.inputs.days }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "10 9 * * 0-4" ]; then
+            echo "mode=close" >> "$GITHUB_OUTPUT"; echo "days=400" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=live" >> "$GITHUB_OUTPUT"; echo "days=400" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fetch data from DSE
+        run: python scripts/fetch_dse.py --mode "${{ steps.m.outputs.mode }}" --days "${{ steps.m.outputs.days }}"
+
+      - name: Commit changes
+        run: |
+          git config user.name  "dse-data-bot"
+          git config user.email "dse-data-bot@users.noreply.github.com"
+          git add data
+          if git diff --cached --quiet; then
+            echo "No changes."
+          else
+            git commit -m "data: ${{ steps.m.outputs.mode }} $(date -u +%Y-%m-%dT%H:%MZ)"
+            git pull --rebase --autostash
+            git push
+          fi
