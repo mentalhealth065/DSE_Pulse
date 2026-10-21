@@ -1,0 +1,935 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DSE Pulse – Dhaka Stock Exchange tracker &amp; signals</title>
+<meta name="description" content="Dhaka Stock Exchange (DSE) market dashboard with charts, screener and rule-based Buy / Hold / Sell signals.">
+<meta name="theme-color" content="#0b7a6b">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b7a6b'/%3E%3Cpath d='M5 22l7-8 5 4 9-11' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #f4f6f9; --card: #ffffff; --fg: #0f172a; --muted: #64748b; --line: #e3e8ef; --soft: #eef2f7;
+  --accent: #0b7a6b; --accent-fg: #fff; --up: #0f9d58; --down: #e5393f; --warn: #b45309;
+  --sb: #0b7a3f; --b: #19a35a; --h: #7b8794; --s: #e0622f; --ss: #c62828;
+  --r: 14px; --shadow: 0 1px 2px rgba(15,23,42,.05), 0 6px 20px rgba(15,23,42,.05);
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans Bengali", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+[data-theme="dark"] {
+  --bg: #0c1117; --card: #151c25; --fg: #e8edf3; --muted: #8b98a8; --line: #263140; --soft: #1c2530;
+  --accent: #2dd4bf; --accent-fg: #06201c; --up: #34d17a; --down: #ff6b70; --warn: #fbbf24;
+  --sb: #22c55e; --b: #4ade80; --h: #94a3b8; --s: #fb923c; --ss: #f87171; --shadow: none;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 var(--font); }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+a { color: var(--accent); text-decoration: none; }
+h1, h2, h3 { margin: 0 0 .5em; line-height: 1.25; letter-spacing: -.01em; }
+h1 { font-size: 1.45rem; } h2 { font-size: 1.1rem; } h3 { font-size: .95rem; }
+p { margin: 0 0 .7em; }
+.muted { color: var(--muted); } .small { font-size: .82rem; } .num { font-variant-numeric: tabular-nums; }
+.up { color: var(--up); } .down { color: var(--down); } .flat { color: var(--muted); }
+.row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; } .sp { flex: 1; }
+
+/* header */
+.top { position: sticky; top: 0; z-index: 30; background: color-mix(in srgb, var(--card) 94%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); padding-top: env(safe-area-inset-top); }
+.top-in { max-width: 1240px; margin: 0 auto; display: flex; align-items: center; gap: 12px; padding: 9px 14px; }
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 1.1rem; color: var(--fg); letter-spacing: -.02em; white-space: nowrap; }
+.logo { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); color: var(--accent-fg); display: grid; place-items: center; }
+.search { position: relative; flex: 1; max-width: 420px; margin-left: auto; }
+.search input { width: 100%; padding: 9px 12px 9px 34px; border-radius: 10px; border: 1px solid var(--line); background: var(--soft); outline: none; }
+.search input:focus { border-color: var(--accent); background: var(--card); }
+.search .mag { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+.sugg { position: absolute; left: 0; right: 0; top: calc(100% + 6px); background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.18); overflow: hidden; z-index: 40; }
+.sugg a { display: flex; gap: 10px; padding: 9px 12px; color: var(--fg); border-bottom: 1px solid var(--line); align-items: center; }
+.sugg a:last-child { border: 0; } .sugg a:hover, .sugg a.act { background: var(--soft); }
+.sugg b { min-width: 86px; } .sugg span { color: var(--muted); font-size: .85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.icon { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); display: grid; place-items: center; font-size: 1.05rem; }
+.nav { max-width: 1240px; margin: 0 auto; display: none; gap: 4px; padding: 0 14px 8px; }
+.nav a { padding: 7px 14px; border-radius: 9px; color: var(--muted); font-weight: 600; }
+.nav a:hover { background: var(--soft); } .nav a.on { background: var(--accent); color: var(--accent-fg); }
+.bottom { position: fixed; z-index: 30; left: 0; right: 0; bottom: 0; display: flex; background: var(--card); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+.bottom a { flex: 1; text-align: center; padding: 8px 0 7px; font-size: .68rem; color: var(--muted); font-weight: 600; }
+.bottom a i { display: block; font-style: normal; font-size: 1.2rem; line-height: 1.2; } .bottom a.on { color: var(--accent); }
+@media (max-width: 859px) { .top-in { flex-wrap: wrap; row-gap: 8px; } .brand { order: 1; } #status { order: 2; margin-left: auto; } #themeBtn { order: 3; } .search { order: 4; flex-basis: 100%; max-width: none; margin-left: 0; } }
+@media (min-width: 860px) { .nav { display: flex; } .bottom { display: none; } main { padding-bottom: 40px !important; } }
+
+main { max-width: 1240px; margin: 0 auto; padding: 14px 14px 92px; }
+.chip-status { font-size: .72rem; font-weight: 700; padding: 3px 9px; border-radius: 99px; background: var(--soft); color: var(--muted); white-space: nowrap; }
+.chip-status.open { background: color-mix(in srgb, var(--up) 16%, transparent); color: var(--up); }
+.banner { background: color-mix(in srgb, var(--warn) 14%, var(--card)); border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); color: var(--fg); border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; font-size: .88rem; }
+
+/* cards & grids */
+.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; box-shadow: var(--shadow); margin-bottom: 14px; }
+.card > h2:first-child, .card > .head:first-child { margin-bottom: 10px; }
+.head { display: flex; align-items: center; gap: 8px; } .head h2 { margin: 0; }
+.grid { display: grid; gap: 14px; } .g2 { grid-template-columns: 1fr; } .g3 { grid-template-columns: 1fr; }
+@media (min-width: 760px) { .g2 { grid-template-columns: 1fr 1fr; } .g3 { grid-template-columns: repeat(3, 1fr); } }
+.g2 > .card, .g3 > .card { margin: 0; }
+.strip { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 14px; scrollbar-width: none; }
+.strip::-webkit-scrollbar { display: none; }
+.ix { flex: 1 0 170px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; display: flex; justify-content: space-between; gap: 6px; align-items: center; color: var(--fg); }
+.ix b { display: block; font-size: .78rem; color: var(--muted); } .ix .v { font-size: 1.15rem; font-weight: 800; }
+.spark { display: block; }
+
+/* badges */
+.sig { display: inline-block; font-size: .7rem; font-weight: 800; letter-spacing: .02em; padding: 3px 9px; border-radius: 6px; color: #fff; white-space: nowrap; }
+.sig.SB { background: var(--sb); } .sig.B { background: var(--b); } .sig.H { background: var(--h); } .sig.S { background: var(--s); } .sig.SS { background: var(--ss); } .sig.NA { background: var(--h); }
+[data-theme="dark"] .sig { color: #04130b; }
+.tag { font-size: .7rem; padding: 2px 8px; border-radius: 6px; background: var(--soft); color: var(--muted); font-weight: 600; }
+
+/* tables */
+.tw { overflow-x: auto; margin: 0 -14px; padding: 0 14px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 9px 8px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+th:first-child, td:first-child { text-align: left; padding-left: 2px; }
+th { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 700; user-select: none; position: sticky; top: 0; background: var(--card); }
+th.sortable { cursor: pointer; } th.sortable:hover { color: var(--fg); } th .ar { font-size: .65rem; }
+tr:last-child td { border-bottom: 0; }
+tbody tr.link { cursor: pointer; } tbody tr.link:hover td { background: var(--soft); }
+td .sym { font-weight: 800; display: block; } td .nm { font-size: .74rem; color: var(--muted); max-width: 170px; overflow: hidden; text-overflow: ellipsis; display: block; }
+.hide-s { display: none; } @media (min-width: 760px) { .hide-s { display: table-cell; } }
+.hide-m { display: none; } @media (min-width: 1000px) { .hide-m { display: table-cell; } }
+.star { background: none; border: 0; font-size: 1.15rem; color: var(--muted); padding: 2px 6px; } .star.on { color: #f5b301; }
+
+.mini li { list-style: none; display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+.mini { margin: 0; padding: 0; } .mini li:last-child { border: 0; } .mini b { flex: 1; } .mini .nm { color: var(--muted); font-size: .76rem; font-weight: 400; display: block; }
+.bar { height: 10px; border-radius: 99px; overflow: hidden; display: flex; background: var(--soft); } .bar i { display: block; height: 100%; }
+.sector { display: grid; grid-template-columns: 130px 1fr 60px; gap: 8px; align-items: center; padding: 4px 0; font-size: .86rem; }
+.sector .track { height: 8px; background: var(--soft); border-radius: 99px; position: relative; } .sector .fill { position: absolute; top: 0; bottom: 0; border-radius: 99px; }
+
+/* controls */
+.seg { display: inline-flex; background: var(--soft); border-radius: 10px; padding: 3px; gap: 2px; flex-wrap: wrap; }
+.seg button { border: 0; background: none; padding: 5px 11px; border-radius: 8px; font-size: .82rem; font-weight: 700; color: var(--muted); }
+.seg button.on { background: var(--card); color: var(--fg); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.field { padding: 8px 11px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); min-width: 0; }
+.btn { border: 0; border-radius: 10px; padding: 9px 15px; font-weight: 700; background: var(--accent); color: var(--accent-fg); }
+.btn.ghost { background: var(--soft); color: var(--fg); } .btn.sm { padding: 5px 10px; font-size: .82rem; } .btn.danger { background: var(--ss); color: #fff; }
+.toggle { display: inline-flex; align-items: center; gap: 5px; font-size: .82rem; color: var(--muted); } .toggle input { accent-color: var(--accent); }
+
+/* stock detail */
+.hero { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
+.hero .price { font-size: 2rem; font-weight: 800; line-height: 1.1; }
+.verdict { border-radius: var(--r); padding: 16px; border: 1px solid var(--line); background: var(--card); }
+.verdict .big { font-size: 1.6rem; font-weight: 900; letter-spacing: -.02em; }
+.gauge { position: relative; height: 12px; border-radius: 99px; margin: 14px 0 4px; background: linear-gradient(90deg, var(--ss), var(--s), var(--h), var(--b), var(--sb)); }
+.gauge i { position: absolute; top: -4px; width: 4px; height: 20px; background: var(--fg); border-radius: 2px; transform: translateX(-2px); }
+.gl { display: flex; justify-content: space-between; font-size: .68rem; color: var(--muted); }
+.parts { margin: 12px 0 0; padding: 0; } .parts li { list-style: none; padding: 8px 0; border-top: 1px solid var(--line); display: grid; grid-template-columns: 82px 1fr 52px; gap: 8px; align-items: center; font-size: .86rem; }
+.parts .pn { font-weight: 700; } .parts .pt { color: var(--muted); font-size: .8rem; grid-column: 1 / -1; margin-top: -4px; }
+.pbar { height: 6px; background: var(--soft); border-radius: 99px; position: relative; } .pbar i { position: absolute; top: 0; bottom: 0; border-radius: 99px; }
+.pbar:after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--muted); opacity: .5; }
+.stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+@media (min-width: 560px) { .stats { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 559px) { .stats div:last-child:nth-child(odd) { grid-column: 1 / -1; } }
+.stats div { background: var(--card); padding: 9px 12px; } .stats span { display: block; font-size: .72rem; color: var(--muted); } .stats b { font-size: .98rem; }
+.chartbox { position: relative; width: 100%; height: 360px; } .chartbox.big { height: 520px; } .chartbox.sm { height: 220px; }
+.chartbox canvas { width: 100%; height: 100%; display: block; touch-action: pan-y; }
+.tip { min-height: 1.4em; font-size: .78rem; color: var(--muted); margin-bottom: 4px; }
+.levels { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; } @media (min-width: 560px) { .levels { grid-template-columns: repeat(4, 1fr); } }
+.lv { border-radius: 10px; padding: 10px; background: var(--soft); } .lv span { font-size: .72rem; color: var(--muted); display: block; } .lv b { font-size: 1.05rem; }
+.disc { font-size: .78rem; color: var(--muted); border-top: 1px solid var(--line); margin-top: 22px; padding-top: 12px; }
+.empty { padding: 26px 8px; text-align: center; color: var(--muted); }
+form.add { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; } form.add .btn { grid-column: 1 / -1; }
+@media (min-width: 700px) { form.add { grid-template-columns: 2fr 1fr 1fr auto; } form.add .btn { grid-column: auto; } }
+details summary { cursor: pointer; font-weight: 700; }
+.kpi { display: flex; gap: 22px; flex-wrap: wrap; } .kpi div b { font-size: 1.25rem; display: block; } .kpi span { font-size: .76rem; color: var(--muted); }
+.toast { position: fixed; left: 50%; bottom: 84px; transform: translate(-50%, 20px); opacity: 0; pointer-events: none; background: var(--fg); color: var(--bg); padding: 9px 16px; border-radius: 10px; font-size: .86rem; transition: .25s; z-index: 80; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+@media (min-width: 860px) { .toast { bottom: 24px; } }
+
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-in">
+    <a class="brand" href="#/market"><span class="logo"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-7 4 3 8-9"/></svg></span>DSE&nbsp;Pulse</a>
+    <div class="search"><span class="mag">&#128269;</span><input id="q" type="search" placeholder="Search symbol or company…" autocomplete="off" aria-label="Search stocks"><div id="sugg" class="sugg" hidden></div></div>
+    <span id="status" class="chip-status"></span>
+    <button class="icon" id="themeBtn" aria-label="Change theme" title="Theme: auto / dark / light">&#127763;</button>
+  </div>
+  <nav class="nav" id="nav"></nav>
+</header>
+<main id="view"><div class="empty">Loading market data…</div></main>
+<nav class="bottom" id="bottom"></nav>
+<div class="toast" id="toast" role="status"></div>
+<script>
+/* ===== Indicators + signal engine (no dependencies) ===== */
+const Ind = (function () {
+  "use strict";
+  const isN = function (x) { return typeof x === "number" && !isNaN(x); };
+
+  function sma(a, n) {
+    const out = new Array(a.length).fill(NaN); let s = 0;
+    for (let i = 0; i < a.length; i++) { s += a[i]; if (i >= n) s -= a[i - n]; if (i >= n - 1) out[i] = s / n; }
+    return out;
+  }
+  function ema(a, n) {
+    const out = new Array(a.length).fill(NaN), k = 2 / (n + 1); let prev = NaN;
+    for (let i = 0; i < a.length; i++) {
+      if (i === n - 1) { let s = 0; for (let j = 0; j < n; j++) s += a[j]; prev = s / n; out[i] = prev; }
+      else if (i >= n) { prev = a[i] * k + prev * (1 - k); out[i] = prev; }
+    }
+    return out;
+  }
+  function rsi(c, n) {
+    n = n || 14; const out = new Array(c.length).fill(NaN);
+    if (c.length <= n) return out;
+    let g = 0, l = 0;
+    for (let i = 1; i <= n; i++) { const d = c[i] - c[i - 1]; if (d >= 0) g += d; else l -= d; }
+    g /= n; l /= n; out[n] = l === 0 ? 100 : 100 - 100 / (1 + g / l);
+    for (let i = n + 1; i < c.length; i++) {
+      const d = c[i] - c[i - 1];
+      g = (g * (n - 1) + (d > 0 ? d : 0)) / n; l = (l * (n - 1) + (d < 0 ? -d : 0)) / n;
+      out[i] = l === 0 ? 100 : 100 - 100 / (1 + g / l);
+    }
+    return out;
+  }
+  function macd(c) {
+    const e12 = ema(c, 12), e26 = ema(c, 26), n = c.length;
+    const line = new Array(n).fill(NaN), sig = new Array(n).fill(NaN), hist = new Array(n).fill(NaN);
+    for (let i = 0; i < n; i++) if (isN(e12[i]) && isN(e26[i])) line[i] = e12[i] - e26[i];
+    const first = line.findIndex(isN);
+    if (first >= 0) {
+      const s = ema(line.slice(first), 9);
+      for (let i = 0; i < s.length; i++) if (isN(s[i])) { sig[first + i] = s[i]; hist[first + i] = line[first + i] - s[i]; }
+    }
+    return { line: line, signal: sig, hist: hist };
+  }
+  function bollinger(c, n, k) {
+    n = n || 20; k = k || 2;
+    const mid = sma(c, n), up = new Array(c.length).fill(NaN), low = new Array(c.length).fill(NaN);
+    for (let i = n - 1; i < c.length; i++) {
+      let s = 0; for (let j = i - n + 1; j <= i; j++) { const d = c[j] - mid[i]; s += d * d; }
+      const sd = Math.sqrt(s / n); up[i] = mid[i] + k * sd; low[i] = mid[i] - k * sd;
+    }
+    return { mid: mid, up: up, low: low };
+  }
+  function atr(h, l, c, n) {
+    n = n || 14; const out = new Array(c.length).fill(NaN); if (c.length <= n) return out;
+    const tr = function (i) { return Math.max(h[i] - l[i], Math.abs(h[i] - c[i - 1]), Math.abs(l[i] - c[i - 1])); };
+    let a = 0; for (let i = 1; i <= n; i++) a += tr(i); a /= n; out[n] = a;
+    for (let i = n + 1; i < c.length; i++) { a = (a * (n - 1) + tr(i)) / n; out[i] = a; }
+    return out;
+  }
+
+  /* Pre-compute every indicator once per stock */
+  function prepare(S) {
+    const c = S.c, P = { n: c.length, c: c, h: S.h, l: S.l, o: S.o, v: S.v };
+    P.sma20 = sma(c, 20); P.sma50 = sma(c, 50); P.sma200 = sma(c, 200);
+    P.rsi = rsi(c, 14);
+    const m = macd(c); P.macd = m.line; P.sig = m.signal; P.hist = m.hist;
+    const b = bollinger(c, 20, 2); P.bbU = b.up; P.bbM = b.mid; P.bbL = b.low;
+    P.atr = atr(S.h, S.l, c, 14);
+    P.vavg = sma(S.v, 20);
+    return P;
+  }
+
+  const TH = { strongBuy: 55, buy: 25, sell: -25, strongSell: -55 };
+  function classify(score) {
+    if (score >= TH.strongBuy) return "STRONG BUY";
+    if (score >= TH.buy) return "BUY";
+    if (score <= TH.strongSell) return "STRONG SELL";
+    if (score <= TH.sell) return "SELL";
+    return "HOLD";
+  }
+
+  /* Score one day (index i). Each part has a max so scores normalise to -100..+100. */
+  function scoreAt(P, i) {
+    const c = P.c[i], parts = [];
+    const add = function (k, pts, max, text) { if (max > 0) parts.push({ k: k, pts: pts, max: max, text: text }); };
+
+    // 1) Trend (max 30)
+    let t = 0, tm = 0; const tt = [];
+    if (isN(P.sma50[i])) { tm += 10; if (c > P.sma50[i]) { t += 10; tt.push("price above its 50-day average"); } else { t -= 10; tt.push("price below its 50-day average"); } }
+    if (isN(P.sma50[i]) && isN(P.sma20[i])) { tm += 10; if (P.sma20[i] > P.sma50[i]) { t += 10; tt.push("20-day average is above the 50-day (short-term uptrend)"); } else { t -= 10; tt.push("20-day average is below the 50-day (short-term downtrend)"); } }
+    if (isN(P.sma200[i])) { tm += 10; if (c > P.sma200[i]) { t += 10; tt.push("price above its 200-day average (long-term uptrend)"); } else { t -= 10; tt.push("price below its 200-day average (long-term downtrend)"); } }
+    add("Trend", t, tm, tt.join("; "));
+
+    // 2) MACD momentum (max 20)
+    if (isN(P.hist[i]) && i > 0 && isN(P.hist[i - 1])) {
+      let m = 0; const mt = [];
+      if (P.hist[i] > 0) { m += 10; mt.push("MACD is above its signal line"); } else { m -= 10; mt.push("MACD is below its signal line"); }
+      if (P.hist[i] > P.hist[i - 1]) { m += 5; mt.push("momentum is strengthening"); } else { m -= 5; mt.push("momentum is fading"); }
+      for (let j = Math.max(1, i - 2); j <= i; j++) {
+        if (isN(P.hist[j - 1]) && P.hist[j - 1] <= 0 && P.hist[j] > 0) { m += 5; mt.push("fresh bullish crossover"); break; }
+        if (isN(P.hist[j - 1]) && P.hist[j - 1] >= 0 && P.hist[j] < 0) { m -= 5; mt.push("fresh bearish crossover"); break; }
+      }
+      add("MACD", Math.max(-20, Math.min(20, m)), 20, mt.join("; "));
+    }
+
+    // 3) RSI (max 15)
+    const r = P.rsi[i];
+    if (isN(r)) {
+      let p, txt;
+      if (r < 30) { p = 15; txt = "RSI " + r.toFixed(0) + ": oversold, a rebound is more likely"; }
+      else if (r < 45) { p = -5; txt = "RSI " + r.toFixed(0) + ": weak momentum"; }
+      else if (r <= 55) { p = 0; txt = "RSI " + r.toFixed(0) + ": neutral"; }
+      else if (r <= 70) { p = 8; txt = "RSI " + r.toFixed(0) + ": healthy strength"; }
+      else if (r <= 80) { p = -5; txt = "RSI " + r.toFixed(0) + ": overbought, may cool off"; }
+      else { p = -15; txt = "RSI " + r.toFixed(0) + ": extremely overbought"; }
+      add("RSI", p, 15, txt);
+    }
+
+    // 4) Bollinger %B (max 10)
+    if (isN(P.bbU[i]) && P.bbU[i] > P.bbL[i]) {
+      const pb = (c - P.bbL[i]) / (P.bbU[i] - P.bbL[i]); let p, txt;
+      if (pb < 0.1) { p = 10; txt = "price is hugging the lower Bollinger band (stretched down)"; }
+      else if (pb < 0.25) { p = 5; txt = "price is in the lower part of its Bollinger range"; }
+      else if (pb > 0.9) { p = -10; txt = "price is hugging the upper Bollinger band (stretched up)"; }
+      else if (pb > 0.75) { p = -5; txt = "price is in the upper part of its Bollinger range"; }
+      else { p = 0; txt = "price is mid-range within its Bollinger bands"; }
+      add("Bollinger", p, 10, txt);
+    }
+
+    // 5) Volume confirmation (max 10)
+    if (isN(P.vavg[i]) && P.vavg[i] > 0 && i > 0) {
+      const vr = P.v[i] / P.vavg[i], up = c >= P.c[i - 1]; let p = 0, txt;
+      if (vr > 1.5) { p = up ? 10 : -10; txt = "volume is " + vr.toFixed(1) + "x normal on a " + (up ? "rising" : "falling") + " day"; }
+      else if (vr > 1.2) { p = up ? 5 : -5; txt = "volume is a bit above normal on a " + (up ? "rising" : "falling") + " day"; }
+      else txt = "volume is normal";
+      add("Volume", p, 10, txt);
+    }
+
+    // 6) Medium-term momentum + position in range (max 10)
+    let q = 0, qm = 0; const qt = [];
+    const look = i >= 63 ? 63 : i >= 21 ? 21 : 0;
+    if (look) { qm += 5; const ret = c / P.c[i - look] - 1; if (ret > 0) { q += 5; qt.push((look === 63 ? "3-month" : "1-month") + " return " + (ret * 100).toFixed(1) + "%"); } else { q -= 5; qt.push((look === 63 ? "3-month" : "1-month") + " return " + (ret * 100).toFixed(1) + "%"); } }
+    if (i >= 59) {
+      let hi = -Infinity, lo = Infinity;
+      for (let j = Math.max(0, i - 251); j <= i; j++) { if (P.h[j] > hi) hi = P.h[j]; if (P.l[j] < lo) lo = P.l[j]; }
+      if (hi > lo) { qm += 5; const pos = (c - lo) / (hi - lo); if (pos > 0.8) { q += 5; qt.push("near its 52-week high"); } else if (pos < 0.2) { q -= 5; qt.push("near its 52-week low"); } else qt.push("mid-way in its 52-week range"); }
+    }
+    add("Momentum", q, qm, qt.join("; "));
+
+    let sum = 0, max = 0, pos = 0, neg = 0;
+    parts.forEach(function (p) { sum += p.pts; max += p.max; if (p.pts > 0) pos++; else if (p.pts < 0) neg++; });
+    const score = max ? Math.round((100 * sum) / max) : 0;
+    return { score: score, parts: parts, pos: pos, neg: neg };
+  }
+
+  /* Honest back-test: what happened 10 trading days after each NEW buy / sell signal */
+  function backtest(P) {
+    const H = 10, n = P.n; if (n < 90) return null;
+    let prev = "HOLD"; const buy = [], sell = [], all = [];
+    for (let i = 50; i < n - H; i++) {
+      const f = P.c[i + H] / P.c[i] - 1; all.push(f);
+      const cls = classify(scoreAt(P, i).score), isB = cls === "BUY" || cls === "STRONG BUY", isS = cls === "SELL" || cls === "STRONG SELL";
+      const wasB = prev === "BUY" || prev === "STRONG BUY", wasS = prev === "SELL" || prev === "STRONG SELL";
+      if (isB && !wasB) buy.push(f); if (isS && !wasS) sell.push(f);
+      prev = cls;
+    }
+    const avg = function (a) { return a.length ? a.reduce(function (x, y) { return x + y; }, 0) / a.length : NaN; };
+    return {
+      horizon: H, base: avg(all), baseN: all.length,
+      buy: { n: buy.length, avg: avg(buy), win: buy.length ? buy.filter(function (x) { return x > 0; }).length / buy.length : NaN },
+      sell: { n: sell.length, avg: avg(sell), win: sell.length ? sell.filter(function (x) { return x < 0; }).length / sell.length : NaN }
+    };
+  }
+
+  /* Full analysis for one stock (latest bar) */
+  function analyze(S, withBacktest) {
+    const n = S.c.length;
+    if (n < 30) return { ok: false, signal: "N/A", score: 0, reason: "Needs at least 30 trading days of history." };
+    const P = prepare(S), i = n - 1, sc = scoreAt(P, i);
+    const lo20 = Math.min.apply(null, S.l.slice(-20)), hi20 = Math.max.apply(null, S.h.slice(-20));
+    const a = P.atr[i], c = S.c[i];
+    const agree = sc.pos + sc.neg ? Math.max(sc.pos, sc.neg) / (sc.pos + sc.neg) : 0;
+    const out = {
+      ok: true, P: P, score: sc.score, signal: classify(sc.score), parts: sc.parts,
+      confidence: agree >= 0.75 ? "High" : agree >= 0.6 ? "Medium" : "Low",
+      rsi: P.rsi[i], atr: a, support: lo20, resistance: hi20,
+      stop: isN(a) ? c - 2 * a : lo20, target: isN(a) ? c + 3 * a : hi20,
+      avgVol: P.vavg[i], sma20: P.sma20[i], sma50: P.sma50[i], sma200: P.sma200[i]
+    };
+    if (withBacktest) out.bt = backtest(P);
+    return out;
+  }
+
+  return { sma: sma, ema: ema, rsi: rsi, macd: macd, bollinger: bollinger, atr: atr, prepare: prepare, scoreAt: scoreAt, classify: classify, analyze: analyze, backtest: backtest, TH: TH, isN: isN };
+})();
+
+/* ===== Data layer: symbol info, demo generator, loader ===== */
+const Data = (function () {
+  "use strict";
+
+  /* symbol: [company name, sector, demo base price (BDT, arbitrary for demo only)] */
+  const META = {
+    GP: ["Grameenphone Ltd.", "Telecommunication", 300], ROBI: ["Robi Axiata Ltd.", "Telecommunication", 28], BSCCL: ["Bangladesh Submarine Cable Co.", "Telecommunication", 90],
+    BATBC: ["British American Tobacco Bangladesh", "Food & Allied", 380], OLYMPIC: ["Olympic Industries Ltd.", "Food & Allied", 150], MARICO: ["Marico Bangladesh Ltd.", "Food & Allied", 2300],
+    SQURPHARMA: ["Square Pharmaceuticals Ltd.", "Pharmaceuticals", 210], BXPHARMA: ["Beximco Pharmaceuticals Ltd.", "Pharmaceuticals", 105], RENATA: ["Renata PLC", "Pharmaceuticals", 560],
+    ACMELAB: ["ACME Laboratories Ltd.", "Pharmaceuticals", 85], BEACONPHAR: ["Beacon Pharmaceuticals Ltd.", "Pharmaceuticals", 45], IBNSINA: ["The Ibn Sina Pharmaceutical", "Pharmaceuticals", 270],
+    ACI: ["ACI Ltd.", "Pharmaceuticals", 190],
+    BRACBANK: ["BRAC Bank PLC", "Bank", 38], ISLAMIBANK: ["Islami Bank Bangladesh PLC", "Bank", 30], CITYBANK: ["The City Bank PLC", "Bank", 21], DUTCHBANGL: ["Dutch-Bangla Bank PLC", "Bank", 52],
+    EBL: ["Eastern Bank PLC", "Bank", 28], PUBALIBANK: ["Pubali Bank PLC", "Bank", 24], UCB: ["United Commercial Bank PLC", "Bank", 12], PRIMEBANK: ["Prime Bank PLC", "Bank", 22],
+    MTB: ["Mutual Trust Bank PLC", "Bank", 20], SOUTHEASTB: ["South East Bank PLC", "Bank", 13], ABBANK: ["AB Bank PLC", "Bank", 9], SIBL: ["Social Islami Bank PLC", "Bank", 10], NBL: ["National Bank Ltd.", "Bank", 4],
+    IDLC: ["IDLC Finance PLC", "Non-Bank Financial", 44], LANKABAFIN: ["LankaBangla Finance PLC", "Non-Bank Financial", 22],
+    POWERGRID: ["Power Grid Co. of Bangladesh", "Fuel & Power", 48], UPGDCL: ["United Power Generation & Distribution", "Fuel & Power", 175], SUMITPOWER: ["Summit Power Ltd.", "Fuel & Power", 36],
+    DOREENPWR: ["Doreen Power Generations", "Fuel & Power", 65], KPCL: ["Khulna Power Co. Ltd.", "Fuel & Power", 33], JAMUNAOIL: ["Jamuna Oil Co. Ltd.", "Fuel & Power", 170],
+    MPETROLEUM: ["Meghna Petroleum Ltd.", "Fuel & Power", 160], TITASGAS: ["Titas Gas T&D Co.", "Fuel & Power", 27], LINDEBD: ["Linde Bangladesh Ltd.", "Fuel & Power", 1250],
+    WALTONHIL: ["Walton Hi-Tech Industries", "Engineering", 760], BEXIMCO: ["Bangladesh Export Import Co.", "Miscellaneous", 85], SINGERBD: ["Singer Bangladesh Ltd.", "Engineering", 130],
+    LHBL: ["LafargeHolcim Bangladesh", "Cement", 52], HEIDELBCEM: ["Heidelberg Cement Bangladesh", "Cement", 215], BSRMLTD: ["BSRM Ltd.", "Engineering", 65],
+    GPHISPAT: ["GPH Ispat Ltd.", "Engineering", 35], RAKCERAMIC: ["RAK Ceramics (Bangladesh)", "Ceramics", 48], BERGERPBL: ["Berger Paints Bangladesh", "Chemical", 1700],
+    UNILEVERCL: ["Unilever Consumer Care", "Food & Allied", 2300], SQUARETEXT: ["Square Textiles Ltd.", "Textile", 42], MJLBD: ["MJL Bangladesh Ltd.", "Fuel & Power", 75],
+    PRAGATIINS: ["Pragati Insurance Ltd.", "Insurance", 60]
+  };
+  function info(sym) { const m = META[sym]; return m ? { name: m[0], sector: m[1] } : { name: sym, sector: "Other" }; }
+
+  /* ---- deterministic demo generator (so the app works before real data exists) ---- */
+  function mulberry(seed) { return function () { seed |= 0; seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  function gauss(r) { let u = 0, v = 0; while (!u) u = r(); while (!v) v = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+  function tradingDates(count) {
+    const out = [], d = new Date(); d.setHours(12, 0, 0, 0);
+    while (out.length < count) { const w = d.getDay(); if (w !== 5 && w !== 6) out.unshift(iso(d)); d.setDate(d.getDate() - 1); } // DSE trades Sun-Thu
+    return out;
+  }
+  function iso(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+
+  function demo() {
+    const N = 300, dates = tradingDates(N), syms = Object.keys(META), stocks = {};
+    const mkt = []; { const r = mulberry(7); let x = 0; for (let i = 0; i < N; i++) { x = x * 0.9 + gauss(r) * 0.006; mkt.push(x); } }
+    syms.forEach(function (s, k) {
+      const r = mulberry(1000 + k * 17), base = META[s][2];
+      let drift = (r() - 0.5) * 0.0016, vol = 0.012 + r() * 0.014, p = base * (0.8 + r() * 0.4), avgVol = (80 + r() * 900) * 1000 * (base > 300 ? 0.1 : 1);
+      const o = [], h = [], l = [], c = [], v = [];
+      for (let i = 0; i < N; i++) {
+        if (i % 60 === 0) drift = (r() - 0.5) * 0.004;
+        const ret = drift + 0.6 * (mkt[i] - (mkt[i - 1] || 0)) + gauss(r) * vol, open = p, close = Math.max(0.5, p * (1 + ret));
+        const hi = Math.max(open, close) * (1 + r() * vol * 0.6), lo = Math.min(open, close) * (1 - r() * vol * 0.6);
+        const vv = Math.round(avgVol * Math.exp(gauss(r) * 0.5) * (1 + Math.abs(ret) * 25));
+        const f = function (x) { return Math.round(x * 10) / 10; };
+        o.push(f(open)); h.push(f(hi)); l.push(f(lo)); c.push(f(close)); v.push(vv); p = close;
+      }
+      stocks[s] = { o: o, h: h, l: l, c: c, v: v };
+    });
+    function idx(scale, w) { let x = scale; return dates.map(function (_, i) { x = x * (1 + (mkt[i] - (mkt[i - 1] || 0)) * w + 0.0003); return Math.round(x * 100) / 100; }); }
+    return { demo: true, updated: new Date().toISOString(), source: "Generated sample data", dates: dates, stocks: stocks,
+      indices: { DSEX: idx(5300, 1.0), DS30: idx(1950, 1.05), DSES: idx(1150, 0.9) } };
+  }
+
+  /* ---- normalise raw market.json -> arrays without gaps ---- */
+  function build(raw) {
+    const list = [];
+    Object.keys(raw.stocks).forEach(function (sym) {
+      const s = raw.stocks[sym], d = [], o = [], h = [], l = [], c = [], v = [];
+      for (let i = 0; i < raw.dates.length; i++) {
+        const cl = s.c[i]; if (cl == null || !(cl > 0)) continue;
+        d.push(raw.dates[i]); c.push(cl);
+        o.push(s.o && s.o[i] > 0 ? s.o[i] : cl); h.push(s.h && s.h[i] > 0 ? Math.max(s.h[i], cl) : cl); l.push(s.l && s.l[i] > 0 ? Math.min(s.l[i], cl) : cl); v.push(s.v && s.v[i] > 0 ? s.v[i] : 0);
+      }
+      if (c.length < 2) return;
+      const n = c.length, meta = info(sym);
+      const day = { sym: sym, name: meta.name, sector: meta.sector, d: d, o: o, h: h, l: l, c: c, v: v };
+      day.ltp = c[n - 1]; day.ycp = c[n - 2]; day.chg = day.ltp - day.ycp; day.pct = (day.chg / day.ycp) * 100;
+      day.vol = v[n - 1]; day.value = (v[n - 1] * c[n - 1]) / 1e6; // BDT mn
+      day.hi = h[n - 1]; day.lo = l[n - 1]; day.open = o[n - 1];
+      list.push(day);
+    });
+    const indices = {};
+    Object.keys(raw.indices || {}).forEach(function (k) {
+      const v = raw.indices[k], d = [], c = [];
+      for (let i = 0; i < raw.dates.length; i++) if (v[i] > 0) { d.push(raw.dates[i]); c.push(v[i]); }
+      if (c.length > 1) indices[k] = { sym: k, name: k + " Index", sector: "Index", d: d, o: c, h: c, l: c, c: c, v: c.map(function () { return 0; }), ltp: c[c.length - 1], ycp: c[c.length - 2], chg: c[c.length - 1] - c[c.length - 2], pct: ((c[c.length - 1] / c[c.length - 2]) - 1) * 100 };
+    });
+    return { demo: !!raw.demo, updated: raw.updated, source: raw.source, stocks: list, bySym: list.reduce(function (m, s) { m[s.sym] = s; return m; }, {}), indices: indices, lastDate: raw.dates[raw.dates.length - 1] };
+  }
+
+  /* ---- merge optional intraday snapshot (data/live.json) onto the latest bar ---- */
+  function applyLive(raw, live) {
+    if (!live || !live.date || !live.stocks) return raw;
+    let di = raw.dates.indexOf(live.date);
+    if (di < 0) { if (live.date < raw.dates[raw.dates.length - 1]) return raw; raw.dates.push(live.date); di = raw.dates.length - 1; Object.keys(raw.stocks).forEach(function (k) { ["o", "h", "l", "c", "v"].forEach(function (f) { raw.stocks[k][f][di] = null; }); }); Object.keys(raw.indices || {}).forEach(function (k) { raw.indices[k][di] = null; }); }
+    Object.keys(live.stocks).forEach(function (sym) {
+      const q = live.stocks[sym]; let s = raw.stocks[sym];
+      if (!s) return;
+      const prevC = s.c[di] != null ? null : null; void prevC;
+      s.c[di] = q.ltp; s.h[di] = q.high || q.ltp; s.l[di] = q.low || q.ltp; s.o[di] = s.o[di] || q.open || q.ycp || q.ltp; s.v[di] = q.volume || 0;
+    });
+    if (live.indices) Object.keys(live.indices).forEach(function (k) { if (raw.indices && raw.indices[k]) raw.indices[k][di] = live.indices[k]; });
+    raw.updated = live.updated || raw.updated;
+    return raw;
+  }
+
+  function getJSON(url) { return fetch(url, { cache: "no-cache" }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }); }
+  function load() {
+    return getJSON("data/market.json").then(function (raw) {
+      if (!raw || !raw.dates || !raw.dates.length) throw new Error("empty");
+      return getJSON("data/live.json").catch(function () { return null; }).then(function (live) { return build(applyLive(raw, live)); });
+    }).catch(function () { return build(demo()); });
+  }
+
+  return { load: load, info: info, META: META, build: build, demo: demo };
+})();
+
+/* ===== Canvas chart: candles/line, SMA, Bollinger, volume, RSI, MACD, crosshair ===== */
+const Chart = (function () {
+  "use strict";
+  const isN = Ind.isN;
+
+  function css(name, fb) { const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return v || fb; }
+  function fmt(x) { return x >= 1000 ? x.toLocaleString("en-IN", { maximumFractionDigits: 0 }) : x >= 100 ? x.toFixed(1) : x.toFixed(2); }
+
+  function draw(canvas, o) {
+    const dpr = window.devicePixelRatio || 1, W = canvas.clientWidth, H = canvas.clientHeight;
+    if (!W || !H) return;
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    const g = canvas.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+    const C = { up: css("--up", "#12a150"), down: css("--down", "#e5484d"), fg: css("--fg", "#111"), mut: css("--muted", "#888"), grid: css("--line", "#ddd"), acc: css("--accent", "#2563eb") };
+    const s = o.s, P = o.P, n = s.c.length, from = o.range ? Math.max(0, n - o.range) : 0, cnt = n - from;
+    const padL = 6, padR = o.compact ? 44 : 54, padT = 8, padB = 18, plotW = W - padL - padR;
+    const step = plotW / cnt, X = function (i) { return padL + (i - from + 0.5) * step; };
+
+    const panels = [{ id: "price", w: 3.2 }];
+    if (o.vol && !o.compact) panels.push({ id: "vol", w: 0.8 });
+    if (o.rsi && !o.compact) panels.push({ id: "rsi", w: 1 });
+    if (o.macd && !o.compact) panels.push({ id: "macd", w: 1 });
+    const totalW = panels.reduce(function (a, p) { return a + p.w; }, 0), avail = H - padT - padB - (panels.length - 1) * 8;
+    let y0 = padT; panels.forEach(function (p) { p.h = (p.w / totalW) * avail; p.y = y0; y0 += p.h + 8; });
+
+    function scale(p, lo, hi) { p.lo = lo; p.hi = hi; p.Y = function (v) { return p.y + p.h - ((v - lo) / (hi - lo || 1)) * p.h; }; }
+    function frame(p, ticks, label) {
+      g.strokeStyle = C.grid; g.lineWidth = 1; g.fillStyle = C.mut; g.font = "10px system-ui,sans-serif"; g.textAlign = "left"; g.textBaseline = "middle";
+      g.strokeRect(padL + 0.5, p.y + 0.5, plotW, p.h);
+      ticks.forEach(function (t) { const y = p.Y(t); if (y < p.y || y > p.y + p.h) return; g.beginPath(); g.moveTo(padL, y); g.lineTo(padL + plotW, y); g.globalAlpha = 0.45; g.stroke(); g.globalAlpha = 1; g.fillText(label ? label(t) : fmt(t), padL + plotW + 4, y); });
+    }
+    function line(arr, p, color, w) {
+      g.beginPath(); let on = false; g.strokeStyle = color; g.lineWidth = w || 1.4;
+      for (let i = from; i < n; i++) { if (!isN(arr[i])) { on = false; continue; } const x = X(i), y = p.Y(arr[i]); if (on) g.lineTo(x, y); else { g.moveTo(x, y); on = true; } }
+      g.stroke();
+    }
+
+    /* price */
+    const pp = panels[0]; let lo = Infinity, hi = -Infinity;
+    for (let i = from; i < n; i++) { lo = Math.min(lo, s.l[i]); hi = Math.max(hi, s.h[i]); if (o.bb && isN(P.bbL[i])) { lo = Math.min(lo, P.bbL[i]); hi = Math.max(hi, P.bbU[i]); } }
+    const pad = (hi - lo) * 0.06 || 1; scale(pp, lo - pad, hi + pad);
+    const tk = []; for (let k = 0; k <= 4; k++) tk.push(pp.lo + ((pp.hi - pp.lo) * k) / 4);
+    frame(pp, tk);
+    if (o.bb) {
+      g.beginPath(); let started = false;
+      for (let i = from; i < n; i++) if (isN(P.bbU[i])) { const x = X(i), y = pp.Y(P.bbU[i]); if (started) g.lineTo(x, y); else { g.moveTo(x, y); started = true; } }
+      for (let i = n - 1; i >= from; i--) if (isN(P.bbL[i])) g.lineTo(X(i), pp.Y(P.bbL[i]));
+      g.closePath(); g.globalAlpha = 0.1; g.fillStyle = C.acc; g.fill(); g.globalAlpha = 1;
+    }
+    if (o.type === "candle" && step >= 3) {
+      const bw = Math.max(1, step * 0.62);
+      for (let i = from; i < n; i++) {
+        const up = s.c[i] >= s.o[i], col = up ? C.up : C.down, x = X(i);
+        g.strokeStyle = col; g.fillStyle = col; g.lineWidth = 1;
+        g.beginPath(); g.moveTo(x, pp.Y(s.h[i])); g.lineTo(x, pp.Y(s.l[i])); g.stroke();
+        const yo = pp.Y(s.o[i]), yc = pp.Y(s.c[i]); g.fillRect(x - bw / 2, Math.min(yo, yc), bw, Math.max(1, Math.abs(yo - yc)));
+      }
+    } else {
+      line(s.c, pp, C.acc, 1.8);
+      g.lineTo(X(n - 1), pp.y + pp.h); g.lineTo(X(from), pp.y + pp.h); g.closePath(); g.globalAlpha = 0.08; g.fillStyle = C.acc; g.fill(); g.globalAlpha = 1;
+    }
+    if (o.sma20) line(P.sma20, pp, "#f59e0b", 1.2);
+    if (o.sma50) line(P.sma50, pp, "#3b82f6", 1.2);
+    if (o.sma200) line(P.sma200, pp, "#a855f7", 1.2);
+    // last price tag
+    const ly = pp.Y(s.c[n - 1]); g.fillStyle = s.c[n - 1] >= s.c[n - 2] ? C.up : C.down; g.fillRect(padL + plotW, ly - 7, padR - 2, 14);
+    g.fillStyle = "#fff"; g.textBaseline = "middle"; g.textAlign = "left"; g.font = "bold 10px system-ui,sans-serif"; g.fillText(fmt(s.c[n - 1]), padL + plotW + 3, ly);
+
+    panels.slice(1).forEach(function (p) {
+      if (p.id === "vol") {
+        let mx = 0; for (let i = from; i < n; i++) mx = Math.max(mx, s.v[i]); scale(p, 0, mx * 1.1 || 1);
+        frame(p, [mx], function (t) { return t >= 1e6 ? (t / 1e6).toFixed(1) + "M" : (t / 1e3).toFixed(0) + "K"; });
+        const bw = Math.max(1, step * 0.7);
+        for (let i = from; i < n; i++) { g.fillStyle = i > 0 && s.c[i] >= s.c[i - 1] ? C.up : C.down; g.globalAlpha = 0.75; g.fillRect(X(i) - bw / 2, p.Y(s.v[i]), bw, p.y + p.h - p.Y(s.v[i])); g.globalAlpha = 1; }
+        g.fillStyle = C.mut; g.textAlign = "left"; g.font = "10px system-ui,sans-serif"; g.fillText("Volume", padL + 4, p.y + 8);
+      } else if (p.id === "rsi") {
+        scale(p, 0, 100); frame(p, [30, 70], function (t) { return String(t); });
+        g.fillStyle = C.down; g.globalAlpha = 0.07; g.fillRect(padL, p.Y(100), plotW, p.Y(70) - p.Y(100)); g.fillStyle = C.up; g.fillRect(padL, p.Y(30), plotW, p.Y(0) - p.Y(30)); g.globalAlpha = 1;
+        line(P.rsi, p, "#8b5cf6", 1.4); g.fillStyle = C.mut; g.textAlign = "left"; g.font = "10px system-ui,sans-serif"; g.fillText("RSI 14", padL + 4, p.y + 8);
+      } else if (p.id === "macd") {
+        let m = 0; for (let i = from; i < n; i++) { if (isN(P.macd[i])) m = Math.max(m, Math.abs(P.macd[i]), Math.abs(P.sig[i] || 0), Math.abs(P.hist[i] || 0)); }
+        scale(p, -m * 1.15 || -1, m * 1.15 || 1); frame(p, [0], function () { return "0"; });
+        const bw = Math.max(1, step * 0.6);
+        for (let i = from; i < n; i++) if (isN(P.hist[i])) { g.fillStyle = P.hist[i] >= 0 ? C.up : C.down; g.globalAlpha = 0.6; const y = p.Y(P.hist[i]), z = p.Y(0); g.fillRect(X(i) - bw / 2, Math.min(y, z), bw, Math.max(1, Math.abs(y - z))); g.globalAlpha = 1; }
+        line(P.macd, p, "#3b82f6", 1.2); line(P.sig, p, "#f59e0b", 1.2); g.fillStyle = C.mut; g.textAlign = "left"; g.font = "10px system-ui,sans-serif"; g.fillText("MACD 12·26·9", padL + 4, p.y + 8);
+      }
+    });
+
+    // date labels
+    g.fillStyle = C.mut; g.font = "10px system-ui,sans-serif"; g.textBaseline = "top"; g.textAlign = "center";
+    const labels = Math.max(2, Math.min(6, Math.floor(plotW / 90)));
+    for (let k = 0; k < labels; k++) { const i = from + Math.round(((cnt - 1) * k) / (labels - 1)); const d = new Date(s.d[i] + "T12:00:00"); g.fillText(d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: cnt > 200 ? "2-digit" : undefined }), Math.min(Math.max(X(i), padL + 22), padL + plotW - 22), H - padB + 4); }
+
+    // crosshair
+    if (o.hover != null && o.hover >= from && o.hover < n) {
+      const i = o.hover, x = X(i); g.strokeStyle = C.mut; g.setLineDash([3, 3]); g.lineWidth = 1; g.beginPath(); g.moveTo(x, padT); g.lineTo(x, H - padB); g.stroke(); g.setLineDash([]);
+      g.fillStyle = C.acc; g.beginPath(); g.arc(x, pp.Y(s.c[i]), 3.5, 0, 6.3); g.fill();
+    }
+    return { from: from, step: step, padL: padL, cnt: cnt };
+  }
+
+  /* Attach a chart to a canvas with pointer-driven crosshair. Returns {update(opts)} */
+  function mount(canvas, tip, opts) {
+    let o = opts, geo = null;
+    function render() { geo = draw(canvas, o); }
+    function idxFrom(ev) {
+      if (!geo) return null; const r = canvas.getBoundingClientRect(), x = ev.clientX - r.left;
+      return Math.max(geo.from, Math.min(o.s.c.length - 1, geo.from + Math.floor((x - geo.padL) / geo.step)));
+    }
+    function move(ev) {
+      const i = idxFrom(ev); if (i == null) return; o.hover = i; render();
+      if (tip) { const s = o.s, d = new Date(s.d[i] + "T12:00:00"), chg = i > 0 ? ((s.c[i] / s.c[i - 1]) - 1) * 100 : 0;
+        tip.innerHTML = "<b>" + d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) + "</b> &nbsp; O " + fmt(s.o[i]) + " &nbsp; H " + fmt(s.h[i]) + " &nbsp; L " + fmt(s.l[i]) + " &nbsp; C <b>" + fmt(s.c[i]) + "</b> &nbsp; <span class='" + (chg >= 0 ? "up" : "down") + "'>" + (chg >= 0 ? "+" : "") + chg.toFixed(2) + "%</span>" + (s.v[i] ? " &nbsp; Vol " + s.v[i].toLocaleString("en-IN") : ""); }
+    }
+    function leave() { o.hover = null; render(); if (tip) tip.textContent = o.tipDefault || ""; }
+    canvas.addEventListener("pointermove", move); canvas.addEventListener("pointerdown", move); canvas.addEventListener("pointerleave", leave);
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(function () { render(); }) : null; if (ro) ro.observe(canvas);
+    render();
+    return { update: function (n) { o = Object.assign(o, n); o.hover = null; render(); }, redraw: render };
+  }
+
+  /* tiny inline SVG sparkline for tables */
+  function spark(vals, w, h) {
+    w = w || 84; h = h || 26; const a = vals.slice(-30), lo = Math.min.apply(null, a), hi = Math.max.apply(null, a), up = a[a.length - 1] >= a[0];
+    const pts = a.map(function (v, i) { return (i * (w - 2)) / (a.length - 1) + 1 + "," + (h - 2 - ((v - lo) / (hi - lo || 1)) * (h - 4)); }).join(" ");
+    return '<svg class="spark" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + " " + h + '"><polyline fill="none" stroke="var(' + (up ? "--up" : "--down") + ')" stroke-width="1.6" points="' + pts + '"/></svg>';
+  }
+
+  return { mount: mount, spark: spark, fmt: fmt };
+})();
+
+/* ===== App: state, router, views ===== */
+const App = (function () {
+  "use strict";
+  const $ = function (s) { return document.querySelector(s); };
+  const esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
+  const KEY = "dsepulse.v1";
+  const DEF = { watch: [], hold: [], theme: "auto", sort: { k: "value", d: -1 }, sector: "All", sig: "All", filter: "", limit: 60, ix: "DSEX", ixRange: 120,
+    cs: { range: 120, type: "candle", sma20: 1, sma50: 1, sma200: 0, bb: 0, vol: 1, rsi: 0, macd: 0 } };
+  let S = JSON.parse(JSON.stringify(DEF));
+  try { const raw = JSON.parse(localStorage.getItem(KEY) || "{}"); Object.keys(raw).forEach(function (k) { if (raw[k] && typeof raw[k] === "object" && !Array.isArray(raw[k]) && S[k]) Object.assign(S[k], raw[k]); else S[k] = raw[k]; }); } catch (e) { /* ignore */ }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } }
+
+  let M = null, A = {}, IXA = {}, BT = null, cur = null;
+
+  /* ---------- formatting ---------- */
+  const n2 = function (x) { return isFinite(x) ? x.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "–"; };
+  const n0 = function (x) { return isFinite(x) ? Math.round(x).toLocaleString("en-IN") : "–"; };
+  const sgn = function (x, d) { return (x > 0 ? "+" : "") + x.toFixed(d == null ? 2 : d); };
+  const dir = function (x) { return x > 0 ? "up" : x < 0 ? "down" : "flat"; };
+  const SC = { "STRONG BUY": "SB", "BUY": "B", "HOLD": "H", "SELL": "S", "STRONG SELL": "SS", "N/A": "NA" };
+  const badge = function (sig) { return '<span class="sig ' + SC[sig] + '">' + sig + "</span>"; };
+  const isBuy = function (s) { return s === "BUY" || s === "STRONG BUY"; };
+  const isSell = function (s) { return s === "SELL" || s === "STRONG SELL"; };
+  function toast(m) { const t = $("#toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(function () { t.classList.remove("show"); }, 2800); }
+  function fdate(iso) { return new Date(iso + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); }
+
+  function dhaka() {
+    const p = {}; new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Dhaka", weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date()).forEach(function (x) { p[x.type] = x.value; });
+    return { wd: p.weekday, mins: parseInt(p.hour, 10) * 60 + parseInt(p.minute, 10) };
+  }
+  function marketOpen() { const d = dhaka(); return d.wd !== "Fri" && d.wd !== "Sat" && d.mins >= 600 && d.mins < 870; }
+
+  /* ---------- theme ---------- */
+  function applyTheme() {
+    const dark = S.theme === "dark" || (S.theme === "auto" && window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches);
+    document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+    const m = document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute("content", dark ? "#0c1117" : "#0b7a6b");
+  }
+
+  /* ---------- chrome ---------- */
+  const NAV = [["market", "Market", "&#128200;"], ["stocks", "Stocks", "&#9776;"], ["signals", "Signals", "&#9889;"], ["portfolio", "Portfolio", "&#9733;"], ["about", "About", "&#8505;"]];
+  function chrome() {
+    $("#nav").innerHTML = NAV.map(function (n) { return '<a href="#/' + n[0] + '" data-nav="' + n[0] + '">' + n[1] + "</a>"; }).join("");
+    $("#bottom").innerHTML = NAV.map(function (n) { return '<a href="#/' + n[0] + '" data-nav="' + n[0] + '"><i>' + n[2] + "</i>" + n[1] + "</a>"; }).join("");
+    refreshStatus();
+  }
+  function refreshStatus() {
+    const el = $("#status"); if (!M) return;
+    if (M.demo) { el.className = "chip-status"; el.style.background = "color-mix(in srgb, var(--warn) 22%, transparent)"; el.style.color = "var(--warn)"; el.textContent = "DEMO DATA"; return; }
+    const open = marketOpen(); el.style.background = ""; el.style.color = ""; el.className = "chip-status" + (open ? " open" : ""); el.textContent = (open ? "● Open · " : "Closed · ") + "as of " + fdate(M.lastDate);
+  }
+
+  /* ---------- search ---------- */
+  function suggest(q) {
+    q = q.trim().toLowerCase(); const box = $("#sugg"); if (!q || !M) { box.hidden = true; return; }
+    const r = M.stocks.filter(function (s) { return s.sym.toLowerCase().indexOf(q) === 0; }).concat(M.stocks.filter(function (s) { return s.sym.toLowerCase().indexOf(q) !== 0 && (s.sym.toLowerCase().indexOf(q) >= 0 || s.name.toLowerCase().indexOf(q) >= 0); })).slice(0, 7);
+    box.innerHTML = r.length ? r.map(function (s) { return '<a href="#/stock/' + esc(s.sym) + '"><b>' + esc(s.sym) + "</b><span>" + esc(s.name) + '</span><span class="sp"></span><span class="num ' + dir(s.chg) + '">' + sgn(s.pct) + "%</span></a>"; }).join("") : '<a><span>No match</span></a>';
+    box.hidden = false;
+  }
+
+  /* ---------- views ---------- */
+  const V = {};
+
+  function row(s, cols) { // compact list row
+    return '<li data-go="' + esc(s.sym) + '"><b>' + esc(s.sym) + '<span class="nm">' + esc(s.name) + '</span></b><span class="num">' + n2(s.ltp) + '</span><span class="num ' + dir(s.chg) + '" style="min-width:62px;text-align:right">' + sgn(s.pct) + "%</span>" + (cols || "") + "</li>";
+  }
+  function list(arr, extra) { return arr.length ? '<ul class="mini">' + arr.map(function (s) { return row(s, extra ? extra(s) : ""); }).join("") + "</ul>" : '<div class="empty">Nothing to show.</div>'; }
+  const tradable = function (s) { return s.vol > 0; };
+  const thin = function (s) { const a = A[s.sym]; return !a || !a.ok || a.avgVol * s.ltp < 1e6; };
+
+  V.market = function () {
+    const st = M.stocks, adv = st.filter(function (s) { return s.chg > 0; }).length, dec = st.filter(function (s) { return s.chg < 0; }).length, unc = st.length - adv - dec;
+    const okA = st.filter(function (s) { return A[s.sym].ok; });
+    const cnt = { buy: 0, hold: 0, sell: 0 }; okA.forEach(function (s) { const g = A[s.sym].signal; if (isBuy(g)) cnt.buy++; else if (isSell(g)) cnt.sell++; else cnt.hold++; });
+    const above = okA.length ? Math.round((okA.filter(function (s) { return s.ltp > A[s.sym].sma50; }).length / okA.length) * 100) : 0;
+    const dx = IXA.DSEX || IXA[Object.keys(IXA)[0]];
+    const breadth = adv + dec ? adv / (adv + dec) : 0.5;
+    let mood = "Neutral", mcls = "H";
+    if (dx && dx.ok) { const sc = dx.score + (breadth - 0.5) * 40; if (sc >= 25) { mood = "Bullish"; mcls = "B"; } else if (sc <= -25) { mood = "Bearish"; mcls = "S"; } }
+    const turnover = st.reduce(function (a, s) { return a + s.value; }, 0), volume = st.reduce(function (a, s) { return a + s.vol; }, 0);
+
+    const ixCards = Object.keys(M.indices).map(function (k) {
+      const x = M.indices[k];
+      return '<a class="ix" href="#/market" data-act="ix" data-k="' + k + '"><div><b>' + k + '</b><span class="v num">' + n2(x.ltp) + '</span><div class="num small ' + dir(x.chg) + '">' + sgn(x.chg) + " (" + sgn(x.pct) + "%)</div></div>" + Chart.spark(x.c) + "</a>";
+    }).join("");
+
+    const gain = st.filter(tradable).sort(function (a, b) { return b.pct - a.pct; }).slice(0, 6), lose = st.filter(tradable).sort(function (a, b) { return a.pct - b.pct; }).slice(0, 6);
+    const act = st.slice().sort(function (a, b) { return b.value - a.value; }).slice(0, 6), volu = st.slice().sort(function (a, b) { return b.vol - a.vol; }).slice(0, 6);
+
+    const secMap = {}; st.forEach(function (s) { (secMap[s.sector] = secMap[s.sector] || []).push(s.pct); });
+    const secs = Object.keys(secMap).filter(function (k) { return secMap[k].length >= 2; }).map(function (k) { return { k: k, p: secMap[k].reduce(function (a, b) { return a + b; }, 0) / secMap[k].length, n: secMap[k].length }; }).sort(function (a, b) { return b.p - a.p; });
+    const mx = Math.max.apply(null, secs.map(function (x) { return Math.abs(x.p); }).concat([0.01]));
+    const secHtml = secs.map(function (x) { const w = (Math.abs(x.p) / mx) * 50; return '<div class="sector"><span>' + esc(x.k) + ' <span class="muted small">' + x.n + '</span></span><div class="track"><div class="fill" style="background:var(--' + (x.p >= 0 ? "up" : "down") + ");" + (x.p >= 0 ? "left:50%;" : "right:50%;") + "width:" + w + '%"></div></div><span class="num ' + dir(x.p) + '" style="text-align:right">' + sgn(x.p) + "%</span></div>"; }).join("");
+
+    const picks = okA.filter(function (s) { return isBuy(A[s.sym].signal) && !thin(s); }).sort(function (a, b) { return A[b.sym].score - A[a.sym].score; }).slice(0, 6);
+    const avoid = okA.filter(function (s) { return isSell(A[s.sym].signal) && !thin(s); }).sort(function (a, b) { return A[a.sym].score - A[b.sym].score; }).slice(0, 6);
+    const sc = function (s) { return '<span class="num small muted" style="min-width:34px;text-align:right">' + (A[s.sym].score > 0 ? "+" : "") + A[s.sym].score + "</span>"; };
+
+    const tot = cnt.buy + cnt.hold + cnt.sell || 1;
+    const ranges = [[60, "3M"], [120, "6M"], [250, "1Y"], [0, "All"]];
+    return (M.demo ? '<div class="banner"><b>Demo mode.</b> These are generated sample prices, <b>not real DSE data</b>. Follow the README to connect real DSE data (takes about 5 minutes).</div>' : "") +
+      '<div class="strip">' + ixCards + "</div>" +
+      '<div class="grid g2" style="margin-bottom:14px"><div class="card"><div class="head"><h2>Market mood</h2><span class="sp"></span><span class="sig ' + mcls + '">' + mood.toUpperCase() + "</span></div>" +
+      '<div class="kpi"><div><b class="up">' + adv + '</b><span>Advancers</span></div><div><b class="down">' + dec + '</b><span>Decliners</span></div><div><b>' + unc + "</b><span>Unchanged</span></div><div><b>" + above + "%</b><span>Above 50-day avg</span></div></div>" +
+      '<div class="bar" style="margin:12px 0 4px"><i style="width:' + (adv / (st.length || 1)) * 100 + '%;background:var(--up)"></i><i style="width:' + (unc / (st.length || 1)) * 100 + '%;background:var(--h)"></i><i style="width:' + (dec / (st.length || 1)) * 100 + '%;background:var(--down)"></i></div>' +
+      '<p class="small muted">Turnover ≈ ৳' + n0(turnover) + " mn · Volume " + n0(volume) + " shares · " + st.length + " stocks tracked</p></div>" +
+      '<div class="card"><div class="head"><h2>Signal snapshot</h2><span class="sp"></span><a class="small" href="#/signals">See all →</a></div>' +
+      '<div class="kpi"><div><b style="color:var(--b)">' + cnt.buy + '</b><span>Buy</span></div><div><b style="color:var(--h)">' + cnt.hold + '</b><span>Hold</span></div><div><b style="color:var(--s)">' + cnt.sell + "</b><span>Sell</span></div></div>" +
+      '<div class="bar" style="margin:12px 0 4px"><i style="width:' + (cnt.buy / tot) * 100 + '%;background:var(--b)"></i><i style="width:' + (cnt.hold / tot) * 100 + '%;background:var(--h)"></i><i style="width:' + (cnt.sell / tot) * 100 + '%;background:var(--s)"></i></div>' +
+      '<p class="small muted">Rule-based technical signals from trend, momentum, RSI, Bollinger bands and volume. Not investment advice.</p></div></div>' +
+
+      '<div class="card"><div class="head"><h2>' + esc(S.ix) + ' index</h2><span class="sp"></span><div class="seg">' + Object.keys(M.indices).map(function (k) { return '<button class="' + (k === S.ix ? "on" : "") + '" data-act="ix" data-k="' + k + '">' + k + "</button>"; }).join("") + '</div><div class="seg">' + ranges.map(function (r) { return '<button class="' + (r[0] === S.ixRange ? "on" : "") + '" data-act="ixr" data-v="' + r[0] + '">' + r[1] + "</button>"; }).join("") + '</div></div><div class="tip" id="ixtip"></div><div class="chartbox sm" style="height:260px"><canvas id="ixc"></canvas></div></div>' +
+
+      '<div class="grid g2" style="margin-bottom:14px"><div class="card"><h2>&#9650; Top gainers</h2>' + list(gain) + '</div><div class="card"><h2>&#9660; Top losers</h2>' + list(lose) + "</div>" +
+      '<div class="card"><h2>&#128176; Most traded by value (৳ mn)</h2>' + list(act, function (s) { return '<span class="num small muted" style="min-width:58px;text-align:right">' + n2(s.value) + "</span>"; }) + '</div><div class="card"><h2>&#128202; Most traded by volume</h2>' + list(volu, function (s) { return '<span class="num small muted" style="min-width:66px;text-align:right">' + n0(s.vol) + "</span>"; }) + "</div></div>" +
+      '<div class="grid g2" style="margin-bottom:14px"><div class="card"><div class="head"><h2>&#9989; Strongest buy setups</h2></div>' + list(picks, sc) + '<p class="small muted" style="margin-top:8px">Liquid stocks only. Score out of 100.</p></div>' +
+      '<div class="card"><div class="head"><h2>&#9888; Weakest setups (sell / avoid)</h2></div>' + list(avoid, sc) + "</div></div>" +
+      '<div class="card"><h2>Sector performance (average change)</h2>' + (secHtml || '<div class="empty">Sector data needs at least 2 stocks per sector.</div>') + "</div>";
+  };
+  V.market.post = function () {
+    const x = M.indices[S.ix] || M.indices[Object.keys(M.indices)[0]]; if (!x) return;
+    const cv = $("#ixc"); if (!cv) return;
+    const P = (IXA[x.sym] && IXA[x.sym].P) || Ind.prepare(x);
+    Chart.mount(cv, $("#ixtip"), { s: x, P: P, range: S.ixRange, type: "line", compact: true, tipDefault: "" });
+  };
+
+  /* ---- screener ---- */
+  function sortVal(s, k) { const a = A[s.sym]; switch (k) { case "sym": return s.sym; case "ltp": return s.ltp; case "chg": return s.chg; case "pct": return s.pct; case "vol": return s.vol; case "value": return s.value; case "rsi": return a.ok ? a.rsi : -1; case "score": return a.ok ? a.score : -999; } return 0; }
+  function filtered() {
+    const f = S.filter.trim().toLowerCase();
+    return M.stocks.filter(function (s) {
+      if (S.sector !== "All" && s.sector !== S.sector) return false;
+      if (S.sig !== "All") { const g = A[s.sym].signal; if (S.sig === "BUY" ? !isBuy(g) : S.sig === "SELL" ? !isSell(g) : g !== "HOLD") return false; }
+      return !f || s.sym.toLowerCase().indexOf(f) >= 0 || s.name.toLowerCase().indexOf(f) >= 0;
+    }).sort(function (a, b) { const x = sortVal(a, S.sort.k), y = sortVal(b, S.sort.k); return (x < y ? -1 : x > y ? 1 : 0) * S.sort.d; });
+  }
+  function th(k, label, cls) { const on = S.sort.k === k; return '<th class="sortable ' + (cls || "") + '" data-act="sort" data-k="' + k + '">' + label + (on ? ' <span class="ar">' + (S.sort.d > 0 ? "▲" : "▼") + "</span>" : "") + "</th>"; }
+  function stockRows(arr, withStar) {
+    return arr.map(function (s) {
+      const a = A[s.sym], w = S.watch.indexOf(s.sym) >= 0;
+      return '<tr class="link" data-go="' + esc(s.sym) + '"><td>' + (withStar ? '<button class="star ' + (w ? "on" : "") + '" data-act="star" data-sym="' + esc(s.sym) + '" aria-label="Watch ' + esc(s.sym) + '">' + (w ? "★" : "☆") + "</button>" : "") + '<span class="sym" style="display:inline-block;vertical-align:middle"><b>' + esc(s.sym) + '</b><span class="nm">' + esc(s.name) + "</span></span></td>" +
+        '<td class="num">' + n2(s.ltp) + '</td><td class="num hide-s ' + dir(s.chg) + '">' + sgn(s.chg) + '</td><td class="num ' + dir(s.chg) + '">' + sgn(s.pct) + '%</td><td class="num hide-s">' + n0(s.vol) + '</td><td class="num hide-m">' + n2(s.value) + '</td><td class="hide-m">' + Chart.spark(s.c) + '</td><td class="num hide-s">' + (a.ok ? a.rsi.toFixed(0) : "–") + "</td><td>" + badge(a.signal) + "</td></tr>";
+    }).join("");
+  }
+  V.stocks = function () {
+    const rows = filtered(), shown = rows.slice(0, S.limit), sectors = ["All"].concat(Array.from(new Set(M.stocks.map(function (s) { return s.sector; }))).sort());
+    const sigs = [["All", "All"], ["BUY", "Buy"], ["HOLD", "Hold"], ["SELL", "Sell"]];
+    return "<h1>All stocks</h1>" +
+      '<div class="row" style="margin-bottom:12px"><input class="field" id="flt" type="search" placeholder="Filter by symbol or name" value="' + esc(S.filter) + '" style="flex:1;min-width:160px">' +
+      '<select class="field" id="sec">' + sectors.map(function (x) { return "<option" + (x === S.sector ? " selected" : "") + ">" + esc(x) + "</option>"; }).join("") + "</select>" +
+      '<div class="seg">' + sigs.map(function (x) { return '<button class="' + (S.sig === x[0] ? "on" : "") + '" data-act="sig" data-k="' + x[0] + '">' + x[1] + "</button>"; }).join("") + "</div></div>" +
+      '<div class="card"><div class="tw"><table><thead><tr>' + th("sym", "Symbol") + th("ltp", "LTP") + th("chg", "Chg", "hide-s") + th("pct", "Chg %") + th("vol", "Volume", "hide-s") + th("value", "Value mn", "hide-m") + '<th class="hide-m">30 days</th>' + th("rsi", "RSI", "hide-s") + th("score", "Signal") + "</tr></thead><tbody>" +
+      (shown.length ? stockRows(shown, true) : '<tr><td colspan="9" class="empty">No stocks match your filters.</td></tr>') + "</tbody></table></div>" +
+      '<div class="row" style="margin-top:10px"><span class="small muted">Showing ' + shown.length + " of " + rows.length + "</span>" + (rows.length > shown.length ? '<button class="btn ghost sm" data-act="more">Show more</button>' : "") + "</div></div>";
+  };
+
+  /* ---- signals ---- */
+  V.signals = function () {
+    const ok = M.stocks.filter(function (s) { return A[s.sym].ok; });
+    const by = function (fn, asc) { return ok.filter(function (s) { return fn(A[s.sym].signal); }).sort(function (a, b) { return asc ? A[a.sym].score - A[b.sym].score : A[b.sym].score - A[a.sym].score; }); };
+    const sc = function (s) { return '<span class="num small muted" style="min-width:34px;text-align:right">' + (A[s.sym].score > 0 ? "+" : "") + A[s.sym].score + "</span>" + (thin(s) ? '<span class="tag">thin</span>' : ""); };
+    const b = by(isBuy), h = by(function (g) { return g === "HOLD"; }), s = by(isSell, true);
+    return "<h1>Buy · Hold · Sell signals</h1><p class='muted'>Every stock is scored from −100 to +100 using six technical checks. Tap a stock to see exactly why.</p>" +
+      '<div class="grid g3"><div class="card"><div class="head"><h2 style="color:var(--b)">Buy</h2><span class="sp"></span><span class="tag">' + b.length + "</span></div>" + list(b.slice(0, 25), sc) + '</div><div class="card"><div class="head"><h2 style="color:var(--h)">Hold</h2><span class="sp"></span><span class="tag">' + h.length + "</span></div>" + list(h.slice(0, 25), sc) + '</div><div class="card"><div class="head"><h2 style="color:var(--s)">Sell</h2><span class="sp"></span><span class="tag">' + s.length + "</span></div>" + list(s.slice(0, 25), sc) + "</div></div>" +
+      '<div class="card" style="margin-top:14px"><div class="head"><h2>Does it work? Market-wide back-test</h2></div>' + (BT ? btHtml(BT) : '<p class="muted small">Replays the rules over each stock’s own history and measures what happened 10 trading days after every <i>new</i> Buy or Sell signal. It takes a second or two.</p><button class="btn" data-act="runbt">Run back-test</button>') + "</div>" +
+      '<div class="card"><details><summary>How the score works</summary><div class="small" style="margin-top:10px">' + method() + "</div></details></div>";
+  };
+  function method() {
+    return "<p>Each stock gets points from six independent checks. Points are scaled to −100…+100.</p><ul>" +
+      "<li><b>Trend (±30)</b>: price vs 50-day and 200-day averages, 20-day vs 50-day average.</li>" +
+      "<li><b>MACD (±20)</b>: MACD vs signal line, whether momentum is rising, and fresh crossovers.</li>" +
+      "<li><b>RSI (±15)</b>: below 30 = oversold (+), 55–70 = healthy strength (+), above 70 = overbought (−).</li>" +
+      "<li><b>Bollinger (±10)</b>: price stretched to the lower band (+) or upper band (−).</li>" +
+      "<li><b>Volume (±10)</b>: unusually heavy volume on an up day (+) or a down day (−).</li>" +
+      "<li><b>Momentum (±10)</b>: 3-month return and position in the 52-week range.</li></ul>" +
+      "<p><b>Signal bands:</b> ≥ +55 Strong Buy · ≥ +25 Buy · between −25 and +25 Hold · ≤ −25 Sell · ≤ −55 Strong Sell.</p>" +
+      "<p><b>Confidence</b> shows how many of the checks agree. <b>Thin</b> means average daily turnover is under ৳10 lakh, so prices can jump and exits can be hard.</p>" +
+      "<p class='muted'>These are mechanical rules on past prices. They do not know about company results, news, dividends, record dates, or DSE circuit-breaker limits.</p>";
+  }
+  function pctTxt(x) { return isFinite(x) ? sgn(x * 100) + "%" : "–"; }
+  function btHtml(b) {
+    return '<div class="kpi" style="margin-bottom:8px"><div><b class="' + dir(b.buy.avg) + '">' + pctTxt(b.buy.avg) + "</b><span>Avg 10-day return after a new BUY (" + n0(b.buy.n) + " signals, " + (isFinite(b.buy.win) ? Math.round(b.buy.win * 100) : "–") + '% were up)</span></div>' +
+      '<div><b class="' + dir(b.sell.avg) + '">' + pctTxt(b.sell.avg) + "</b><span>Avg 10-day return after a new SELL (" + n0(b.sell.n) + " signals, " + (isFinite(b.sell.win) ? Math.round(b.sell.win * 100) : "–") + '% fell)</span></div>' +
+      '<div><b class="' + dir(b.base) + '">' + pctTxt(b.base) + "</b><span>Avg 10-day return on any random day</span></div></div>" +
+      '<p class="small muted">A signal is only useful if BUY beats the random-day average and SELL falls below it. Past results do not guarantee future results, and prices here exclude brokerage and tax. ' + (M.demo ? "<b>Demo data is random, so no edge is expected.</b>" : "") + "</p>";
+  }
+  function runBacktest() {
+    let nb = 0, ns = 0, sb = 0, ss = 0, sbase = 0, nbase = 0, wb = 0, ws = 0;
+    M.stocks.forEach(function (s) { const a = A[s.sym]; if (!a.ok) return; const r = Ind.backtest(a.P); if (!r) return; sbase += r.base * r.baseN; nbase += r.baseN; if (r.buy.n) { sb += r.buy.avg * r.buy.n; nb += r.buy.n; wb += r.buy.win * r.buy.n; } if (r.sell.n) { ss += r.sell.avg * r.sell.n; ns += r.sell.n; ws += r.sell.win * r.sell.n; } });
+    BT = { base: nbase ? sbase / nbase : NaN, buy: { n: nb, avg: nb ? sb / nb : NaN, win: nb ? wb / nb : NaN }, sell: { n: ns, avg: ns ? ss / ns : NaN, win: ns ? ws / ns : NaN } };
+  }
+
+  /* ---- portfolio ---- */
+  function hint(s, a, h) {
+    if (!a.ok) return "Not enough history";
+    if (s.ltp < a.stop && h) return "Below stop zone. Review";
+    return { "STRONG BUY": "Hold. Strong setup", "BUY": "Hold / add on dips", "HOLD": "Hold", "SELL": "Review. Consider trimming", "STRONG SELL": "Consider reducing" }[a.signal];
+  }
+  V.portfolio = function () {
+    const w = S.watch.map(function (k) { return M.bySym[k]; }).filter(Boolean);
+    let cost = 0, val = 0;
+    const hrows = S.hold.map(function (h, i) {
+      const s = M.bySym[h.sym]; if (!s) return "";
+      const a = A[s.sym], c = h.qty * h.price, v = h.qty * s.ltp; cost += c; val += v; const pl = v - c;
+      return '<tr class="link" data-go="' + esc(s.sym) + '"><td><span class="sym">' + esc(s.sym) + '</span></td><td class="num">' + n0(h.qty) + '</td><td class="num hide-s">' + n2(h.price) + '</td><td class="num">' + n2(s.ltp) + '</td><td class="num hide-s">' + n0(v) + '</td><td class="num ' + dir(pl) + '">' + (pl >= 0 ? "+" : "") + n0(pl) + '<br><span class="small">' + sgn((pl / c) * 100) + "%</span></td><td>" + badge(a.signal) + '<div class="small muted">' + esc(hint(s, a, true)) + '</div></td><td><button class="btn ghost sm" data-act="delhold" data-i="' + i + '">✕</button></td></tr>';
+    }).join("");
+    const tp = val - cost;
+    return "<h1>Portfolio &amp; watchlist</h1><p class='muted small'>Stored only in this browser. Nothing is sent anywhere.</p>" +
+      '<div class="card"><h2>My holdings</h2><form class="add" id="addHold"><input class="field" name="sym" list="symlist" placeholder="Symbol e.g. GP" required autocapitalize="characters"><input class="field" name="qty" type="number" min="1" step="1" placeholder="Shares" required><input class="field" name="price" type="number" min="0.01" step="0.01" placeholder="Avg buy price ৳" required><button class="btn">Add</button></form>' +
+      '<datalist id="symlist">' + M.stocks.map(function (s) { return '<option value="' + esc(s.sym) + '">' + esc(s.name) + "</option>"; }).join("") + "</datalist>" +
+      (S.hold.length ? '<div class="kpi" style="margin-bottom:10px"><div><b>৳' + n0(val) + "</b><span>Current value</span></div><div><b>৳" + n0(cost) + '</b><span>Invested</span></div><div><b class="' + dir(tp) + '">' + (tp >= 0 ? "+" : "") + n0(tp) + " (" + sgn(cost ? (tp / cost) * 100 : 0) + '%)</b><span>Profit / loss</span></div></div><div class="tw"><table><thead><tr><th>Stock</th><th>Qty</th><th class="hide-s">Avg cost</th><th>LTP</th><th class="hide-s">Value</th><th>P/L</th><th>Signal</th><th></th></tr></thead><tbody>' + hrows + "</tbody></table></div>" : '<div class="empty">No holdings yet. Add one above.</div>') + "</div>" +
+      '<div class="card"><h2>Watchlist ★</h2>' + (w.length ? '<div class="tw"><table><thead><tr><th>Symbol</th><th>LTP</th><th class="hide-s">Chg</th><th>Chg %</th><th class="hide-s">Volume</th><th class="hide-m">Value mn</th><th class="hide-m">30 days</th><th class="hide-s">RSI</th><th>Signal</th></tr></thead><tbody>' + stockRows(w, true) + "</tbody></table></div>" : '<div class="empty">Tap ☆ next to any stock to add it here.</div>') + "</div>";
+  };
+
+  /* ---- stock detail ---- */
+  function lv(label, v, cls) { return '<div class="lv"><span>' + label + "</span><b class=\"num " + (cls || "") + '">' + v + "</b></div>"; }
+  function st(label, v) { return "<div><span>" + label + "</span><b class=\"num\">" + v + "</b></div>"; }
+  V.stock = function () {
+    const s = M.bySym[cur]; if (!s) return '<div class="empty"><h2>Stock not found</h2><p>“' + esc(cur) + '” is not in the loaded data.</p><a class="btn" href="#/stocks">Browse all stocks</a></div>';
+    const a = A[s.sym], w = S.watch.indexOf(s.sym) >= 0, c = S.cs, n = s.c.length;
+    const hi52 = Math.max.apply(null, s.h.slice(-250)), lo52 = Math.min.apply(null, s.l.slice(-250));
+    const ranges = [[22, "1M"], [66, "3M"], [120, "6M"], [250, "1Y"], [0, "All"]];
+    const tg = function (k, l) { return '<label class="toggle"><input type="checkbox" data-act="tg" data-k="' + k + '"' + (c[k] ? " checked" : "") + "> " + l + "</label>"; };
+    let verdict = "";
+    if (a.ok) {
+      const stance = isBuy(a.signal) ? "Technicals favour buyers. Consider buying in parts rather than all at once, with a stop-loss near " + n2(a.stop) + "." : isSell(a.signal) ? "Technicals favour sellers. Consider reducing or avoiding new buys until the trend repairs. Watch support near " + n2(a.support) + "." : "Mixed signals. Hold existing shares and wait for a clearer trend before adding.";
+      const pos = Math.max(2, Math.min(98, (a.score + 100) / 2));
+      verdict = '<div class="verdict"><div class="row"><div><div class="small muted">Signal</div><div class="big">' + badge(a.signal) + '</div></div><span class="sp"></span><div style="text-align:right"><div class="small muted">Score</div><div class="big num">' + (a.score > 0 ? "+" : "") + a.score + '</div></div></div><div class="gauge"><i style="left:' + pos + '%"></i></div><div class="gl"><span>Strong sell</span><span>Hold</span><span>Strong buy</span></div>' +
+        '<p style="margin:12px 0 4px"><b>' + esc(stance) + '</b></p><p class="small muted">Confidence: <b>' + a.confidence + "</b> (" + (a.confidence === "High" ? "most checks agree" : a.confidence === "Medium" ? "checks partly agree" : "checks disagree") + ")." + (thin(s) ? " <b>Thinly traded.</b> Prices can move sharply." : "") + "</p>" +
+        '<ul class="parts">' + a.parts.map(function (p) { const wd = (Math.abs(p.pts) / p.max) * 50; return '<li><span class="pn">' + p.k + '</span><div class="pbar"><i style="background:var(--' + (p.pts >= 0 ? "up" : "down") + ");" + (p.pts >= 0 ? "left:50%;" : "right:50%;") + "width:" + wd + '%"></i></div><span class="num ' + dir(p.pts) + '" style="text-align:right">' + (p.pts > 0 ? "+" : "") + p.pts + "/" + p.max + '</span><span class="pt">' + esc(p.text.charAt(0).toUpperCase() + p.text.slice(1)) + ".</span></li>"; }).join("") + "</ul></div>";
+    } else verdict = '<div class="verdict"><div class="big">' + badge("N/A") + '</div><p class="muted">' + esc(a.reason) + "</p></div>";
+
+    let bt = "";
+    if (a.ok) {
+      const b = a.bt || (a.bt = Ind.backtest(a.P));
+      bt = '<div class="card"><h2>Back-test on ' + esc(s.sym) + "</h2>" + (b ? '<p>' + (b.buy.n >= 5 ? "After <b>" + b.buy.n + "</b> past new BUY signals, the price 10 trading days later was higher <b>" + Math.round(b.buy.win * 100) + "%</b> of the time (average <b class='" + dir(b.buy.avg) + "'>" + pctTxt(b.buy.avg) + "</b>)." : "Too few past BUY signals (" + b.buy.n + ") to say anything useful.") + "</p><p>" + (b.sell.n >= 5 ? "After <b>" + b.sell.n + "</b> new SELL signals, it was lower <b>" + Math.round(b.sell.win * 100) + "%</b> of the time (average <b class='" + dir(b.sell.avg) + "'>" + pctTxt(b.sell.avg) + "</b>)." : "Too few past SELL signals (" + b.sell.n + ") to say anything useful.") + "</p><p class='small muted'>Compare with the average 10-day return of <b>" + pctTxt(b.base) + "</b> on any random day. Small samples are noisy; past results don’t predict the future.</p>" : '<p class="muted">Needs about 90 trading days of history.</p>') + "</div>";
+    }
+
+    return '<div class="row" style="margin-bottom:12px"><a class="btn ghost sm" href="#/stocks">← Stocks</a></div>' +
+      '<div class="hero" style="margin-bottom:14px"><div><div class="row"><h1 style="margin:0">' + esc(s.sym) + '</h1><span class="tag">' + esc(s.sector) + '</span><button class="star ' + (w ? "on" : "") + '" data-act="star" data-sym="' + esc(s.sym) + '" style="font-size:1.5rem" aria-label="Toggle watchlist">' + (w ? "★" : "☆") + '</button></div><div class="muted">' + esc(s.name) + '</div></div><span class="sp"></span><div style="text-align:right"><div class="price num">৳' + n2(s.ltp) + '</div><div class="num ' + dir(s.chg) + '"><b>' + sgn(s.chg) + " (" + sgn(s.pct) + "%)</b></div><div class=\"small muted\">" + fdate(s.d[n - 1]) + "</div></div></div>" +
+      '<div class="card"><div class="row" style="margin-bottom:8px"><div class="seg">' + ranges.map(function (r) { return '<button class="' + (c.range === r[0] ? "on" : "") + '" data-act="rg" data-v="' + r[0] + '">' + r[1] + "</button>"; }).join("") + '</div><div class="seg"><button class="' + (c.type === "candle" ? "on" : "") + '" data-act="ct" data-v="candle">Candles</button><button class="' + (c.type === "line" ? "on" : "") + '" data-act="ct" data-v="line">Line</button></div></div>' +
+      '<div class="row" style="margin-bottom:8px;gap:14px">' + tg("sma20", "SMA 20") + tg("sma50", "SMA 50") + tg("sma200", "SMA 200") + tg("bb", "Bollinger") + tg("vol", "Volume") + tg("rsi", "RSI") + tg("macd", "MACD") + '</div><div class="tip" id="tip"></div><div class="chartbox ' + (c.rsi || c.macd ? "big" : "") + '"><canvas id="cv"></canvas></div></div>' +
+      '<div class="grid g2"><div>' + verdict + (a.ok ? '<div class="card" style="margin-top:14px"><h2>Key levels</h2><div class="levels">' + lv("Support (20d low)", n2(a.support)) + lv("Resistance (20d high)", n2(a.resistance)) + lv("Stop-loss idea (2×ATR)", n2(a.stop), "down") + lv("Target idea (3×ATR)", n2(a.target), "up") + '</div><p class="small muted" style="margin:10px 0 0">ATR = average daily range. These are volatility-based reference levels, not guarantees.</p></div>' : "") + "</div><div>" +
+      '<div class="card"><h2>Key statistics</h2><div class="stats">' + st("Open", n2(s.open)) + st("High", n2(s.hi)) + st("Low", n2(s.lo)) + st("Prev. close", n2(s.ycp)) + st("Volume", n0(s.vol)) + st("Value (৳ mn)", n2(s.value)) + st("52-wk high", n2(hi52)) + st("52-wk low", n2(lo52)) + st("1-month return", n > 22 ? sgn((s.c[n - 1] / s.c[n - 23] - 1) * 100) + "%" : "–") + st("Avg volume 20d", a.ok ? n0(a.avgVol) : "–") + st("RSI (14)", a.ok ? a.rsi.toFixed(1) : "–") + st("ATR (14)", a.ok && isFinite(a.atr) ? n2(a.atr) : "–") + st("SMA 50", a.ok && isFinite(a.sma50) ? n2(a.sma50) : "–") + st("SMA 200", a.ok && isFinite(a.sma200) ? n2(a.sma200) : "–") + st("History", n + " days") + "</div></div>" + bt + "</div></div>" +
+      '<p class="disc">Signals are generated by simple technical rules and are for education only. They are <b>not</b> investment advice or a recommendation to buy or sell any security. Do your own research or consult a licensed adviser before trading.</p>';
+  };
+  V.stock.post = function () {
+    const s = M.bySym[cur]; if (!s) return; const a = A[s.sym], cv = $("#cv"); if (!cv) return;
+    const c = S.cs, P = a.ok ? a.P : Ind.prepare(s), n = s.c.length;
+    const last = n - 1; $("#tip").innerHTML = "Last: " + fdate(s.d[last]) + " · O " + Chart.fmt(s.o[last]) + " H " + Chart.fmt(s.h[last]) + " L " + Chart.fmt(s.l[last]) + " C <b>" + Chart.fmt(s.c[last]) + "</b> · move over the chart to inspect";
+    Chart.mount(cv, $("#tip"), { s: s, P: P, range: c.range, type: c.type, sma20: c.sma20, sma50: c.sma50, sma200: c.sma200, bb: c.bb, vol: c.vol, rsi: c.rsi, macd: c.macd, tipDefault: $("#tip").innerHTML });
+  };
+
+  /* ---- about ---- */
+  V.about = function () {
+    return "<h1>About DSE Pulse</h1>" +
+      '<div class="card"><h2>Data</h2><p>' + (M.demo ? "<b>You are looking at generated demo data.</b> Follow the README to switch on real Dhaka Stock Exchange data." : "Source: <b>" + esc(M.source || "DSE") + "</b>. Last update: <b>" + new Date(M.updated).toLocaleString("en-GB", { timeZone: "Asia/Dhaka", dateStyle: "medium", timeStyle: "short" }) + " (Dhaka)</b>. Latest trading day in file: <b>" + fdate(M.lastDate) + "</b>.") + "</p><p class='small muted'>Prices are end-of-day (plus optional intraday snapshots) and may be delayed. Always confirm on the official DSE website or with your broker before trading.</p></div>" +
+      '<div class="card"><h2>How signals are made</h2><div class="small">' + method() + "</div></div>" +
+      '<div class="card"><h2>Disclaimer</h2><p class="small">DSE Pulse is an educational tool. It is not affiliated with the Dhaka Stock Exchange PLC or the BSEC and does not provide investment, legal or tax advice. Buy / Hold / Sell labels are mechanical outputs of technical rules, not recommendations. Markets involve risk of loss. You are responsible for your own decisions.</p></div>' +
+      '<div class="card"><h2>Your data</h2><p class="small muted">Watchlist and holdings live only in this browser (localStorage).</p><button class="btn danger sm" data-act="reset">Erase my watchlist &amp; holdings</button></div>';
+  };
+
+  /* ---------- router / render ---------- */
+  function route() { const p = (location.hash || "#/market").replace(/^#\//, "").split("/"); const r = p[0]; if (r === "stock") { cur = decodeURIComponent(p[1] || "").toUpperCase(); return "stock"; } return V[r] ? r : "market"; }
+  function render(keep) {
+    if (!M) return;
+    const r = route(), y = window.scrollY;
+    $("#view").innerHTML = V[r]();
+    document.querySelectorAll("[data-nav]").forEach(function (a) { const k = a.getAttribute("data-nav"); a.classList.toggle("on", k === r || (r === "stock" && k === "stocks")); });
+    if (V[r].post) V[r].post();
+    if (keep) window.scrollTo(0, y); else window.scrollTo(0, 0);
+    document.title = (r === "stock" && M.bySym[cur] ? cur + " – " : "") + "DSE Pulse – Dhaka Stock Exchange tracker";
+  }
+
+  /* ---------- actions ---------- */
+  const X = {
+    sort: function (t) { const k = t.dataset.k; S.sort = { k: k, d: S.sort.k === k ? -S.sort.d : (k === "sym" ? 1 : -1) }; save(); render(true); },
+    sig: function (t) { S.sig = t.dataset.k; S.limit = 60; save(); render(true); },
+    more: function () { S.limit += 60; render(true); },
+    star: function (t) { const k = t.dataset.sym, i = S.watch.indexOf(k); if (i >= 0) { S.watch.splice(i, 1); toast(k + " removed from watchlist"); } else { S.watch.push(k); toast(k + " added to watchlist ★"); } save(); render(true); },
+    ix: function (t, e) { S.ix = t.dataset.k; save(); if (location.hash !== "#/market") location.hash = "#/market"; else render(true); if (e && e.preventDefault) e.preventDefault(); },
+    ixr: function (t) { S.ixRange = parseInt(t.dataset.v, 10); save(); render(true); },
+    rg: function (t) { S.cs.range = parseInt(t.dataset.v, 10); save(); render(true); },
+    ct: function (t) { S.cs.type = t.dataset.v; save(); render(true); },
+    tg: function (t) { S.cs[t.dataset.k] = t.checked ? 1 : 0; save(); render(true); },
+    runbt: function (t) { t.textContent = "Running…"; setTimeout(function () { runBacktest(); render(true); }, 30); },
+    delhold: function (t) { S.hold.splice(parseInt(t.dataset.i, 10), 1); save(); render(true); },
+    reset: function () { if (confirm("Erase your watchlist and holdings from this browser?")) { S.watch = []; S.hold = []; save(); toast("Erased"); render(); } },
+    theme: function () { S.theme = S.theme === "auto" ? "dark" : S.theme === "dark" ? "light" : "auto"; save(); applyTheme(); toast("Theme: " + S.theme); render(true); }
+  };
+  document.addEventListener("click", function (e) {
+    const t = e.target.closest("[data-act],[data-go]"); if (!t) return;
+    if (t.dataset.act) { if (t.dataset.act === "tg") return; if (X[t.dataset.act]) { if (t.tagName !== "A") e.preventDefault(); X[t.dataset.act](t, e); } return; }
+    if (t.dataset.go) location.hash = "#/stock/" + encodeURIComponent(t.dataset.go);
+  });
+  document.addEventListener("change", function (e) {
+    const t = e.target;
+    if (t.dataset && t.dataset.act === "tg") X.tg(t);
+    else if (t.id === "sec") { S.sector = t.value; S.limit = 60; save(); render(true); }
+  });
+  document.addEventListener("input", function (e) {
+    const t = e.target;
+    if (t.id === "flt") { S.filter = t.value; S.limit = 60; const p = t.selectionStart; render(true); const n = $("#flt"); if (n) { n.focus(); try { n.setSelectionRange(p, p); } catch (x) { /* ignore */ } } }
+    else if (t.id === "q") suggest(t.value);
+  });
+  document.addEventListener("submit", function (e) {
+    if (e.target.id !== "addHold") return; e.preventDefault();
+    const f = e.target, sym = f.sym.value.trim().toUpperCase(), qty = parseFloat(f.qty.value), price = parseFloat(f.price.value);
+    if (!M.bySym[sym]) return toast("“" + sym + "” not found. Pick a symbol from the list.");
+    if (!(qty > 0) || !(price > 0)) return toast("Enter a valid quantity and price.");
+    S.hold.push({ sym: sym, qty: qty, price: price }); save(); toast(sym + " added"); render(true);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.target.id === "q" && e.key === "Enter") { const a = document.querySelector("#sugg a[href]"); if (a) { location.hash = a.getAttribute("href"); e.target.value = ""; $("#sugg").hidden = true; e.target.blur(); } }
+    if (e.key === "Escape") $("#sugg").hidden = true;
+  });
+  document.addEventListener("pointerdown", function (e) { if (!e.target.closest(".search")) $("#sugg").hidden = true; else if (e.target.closest("#sugg a")) setTimeout(function () { $("#sugg").hidden = true; $("#q").value = ""; }, 0); });
+  window.addEventListener("hashchange", function () { render(); });
+  $("#themeBtn").addEventListener("click", X.theme);
+  if (window.matchMedia) { const mq = matchMedia("(prefers-color-scheme: dark)"); if (mq.addEventListener) mq.addEventListener("change", function () { if (S.theme === "auto") { applyTheme(); render(true); } }); }
+
+  /* ---------- boot ---------- */
+  function boot(model) {
+    M = model;
+    M.stocks.forEach(function (s) { A[s.sym] = Ind.analyze(s, false); });
+    Object.keys(M.indices).forEach(function (k) { IXA[k] = Ind.analyze(M.indices[k], false); });
+    if (!M.indices[S.ix]) S.ix = Object.keys(M.indices)[0];
+    chrome(); render(); setInterval(refreshStatus, 60000);
+  }
+  applyTheme();
+  return { boot: boot, _debug: function () { return { M: M, A: A, S: S }; } };
+})();
+
+Data.load().then(App.boot).catch(function (e) { document.getElementById("view").innerHTML = '<div class="empty"><h2>Could not start</h2><p>' + String(e && e.message || e) + "</p></div>"; });
+
+</script>
+</body>
+</html>
